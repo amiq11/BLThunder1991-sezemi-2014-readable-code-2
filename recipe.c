@@ -5,7 +5,8 @@
 #include <stdint.h>
 
 /* 全てのレシピを保存するコンテナの初期サイズ */
-const int RECIPE_LINES_DEFAULT_SIZE = 4; /* 今回の課題では適切な大きさ */
+const size_t RECIPE_ARRAY_DEFAULT_SIZE = 4; /* 今回の課題では適切な大きさ */
+const size_t RECIPE_ARRAY_FGETS_BUFFER_SIZE = 1024;
 
 void *mymalloc( size_t size ) {
   void *tmp = malloc( size );
@@ -13,58 +14,81 @@ void *mymalloc( size_t size ) {
   return tmp;
 }
 
-typedef struct _recipe_lines {
-  char **lines;
+typedef struct _recipe {
+  char *name;
+  char *url;
+} recipe_t;
+
+typedef struct _recipe_array {
+  recipe_t **array;
   size_t size;
   size_t alloced;
-} recipe_lines_t;
+} recipe_array_t;
 
-recipe_lines_t *recipe_lines_create( FILE *fp ) {
-  /* lines[n]にはrecipe_idがn+1のものが入る点に注意 */
-  char **lines = mymalloc( sizeof( char * ) * RECIPE_LINES_DEFAULT_SIZE );
-  size_t lines_alloced = RECIPE_LINES_DEFAULT_SIZE;
-  
-  int id = 1;
-  char *line;
-  while ( fscanf( fp, "%ms", &line ) != EOF ) {
-    if ( strlen( line ) == 0 ) continue;
-    if ( (uint32_t) id >= lines_alloced ) {
-      size_t new_size = lines_alloced * 2;
-      char **new_lines = realloc( lines, sizeof( char * ) * new_size );
-      if ( new_lines == NULL ) { perror( "realloc" ); exit( EXIT_FAILURE ); }
-      lines = new_lines;
-      lines_alloced = new_size;
-    }
-    lines[id - 1] = line;
-    id++;
-  }
-
-  /* create object to return */
-  recipe_lines_t *recipes = mymalloc( sizeof( recipe_lines_t ) );
-  recipes->lines = lines;
-  recipes->size = id-1;
-  recipes->alloced = lines_alloced;
-  return recipes;
+/*** recipe_t ***/
+/* name, urlはバッファが確保されてコピーされる */
+recipe_t *recipe_create( char *name, char *url ) {
+  recipe_t *r = mymalloc( sizeof( recipe_t ) );
+  int rc = sscanf( name, "%ms", &r->name );
+  if ( rc <= 0 ) { perror( "sscanf" ); exit( EXIT_FAILURE ); }
+  rc = sscanf( url, "%ms", &r->url );
+  if ( rc <= 0 ) { perror( "sscanf" ); exit( EXIT_FAILURE ); }
+  return r;
 }
 
-void recipe_lines_free( recipe_lines_t *recipes ) {
-  free( recipes->lines );
-  recipes->lines = NULL;
+/* TODO: 本当はIDはrecipeが保持すべきデータ */
+void recipe_print( recipe_t *recipe, int id ) {
+  printf( "%d: %s %s\n", id, recipe->name, recipe->url );
+}
+
+/*** recipe_array_t ***/
+void recipe_array_append( recipe_array_t *this, recipe_t *recipe ) {
+  static int id = 1;
+  if ( (uint32_t) id >= this->alloced ) {
+    size_t new_size = this->alloced * 2;
+    recipe_t **new_recipes = realloc( this->array, sizeof( recipe_t * ) * new_size );
+    if ( new_recipes == NULL ) { perror( "realloc" ); exit( EXIT_FAILURE ); }
+    this->array = new_recipes;
+    this->alloced = new_size;
+  }
+  this->array[id-1] = recipe;
+  this->size++;
+}
+
+recipe_array_t *recipe_array_create( FILE *fp ) {
+  /* array[n]にはrecipe_idがn+1のものが入る点に注意 */
+  recipe_array_t *this = mymalloc( sizeof( recipe_array_t ) );
+  this->array = mymalloc( sizeof( recipe_t ) * RECIPE_ARRAY_DEFAULT_SIZE );
+  this->size = 0;
+  this->alloced = RECIPE_ARRAY_DEFAULT_SIZE;
+
+  /* テキストのパース */
+  char *name, *url;
+  while ( fscanf( fp, "%ms %ms", &name, &url ) != EOF ) {
+    recipe_t *r = recipe_create( name, url );
+    recipe_array_append( this, r );
+  }
+  return this;
+}
+
+void recipe_array_free( recipe_array_t *recipes ) {
+  free( recipes->array );
+  recipes->array = NULL;
   recipes->size = -1;
   recipes->alloced = 0;
 }
 
 /* idを指定して表示 */
 /* id <= 0 のときは全てを表示 */
-void recipe_lines_print( recipe_lines_t *recipes, int id ) {
+void recipe_array_print( recipe_array_t *recipes, int id ) {
   if ( id > 0 ) {
-    if ( (uint32_t) id <= recipes->size ) 
-      printf( "%d: %s\n", id, recipes->lines[id-1] );
+    if ( (uint32_t) id <= recipes->size )
+      recipe_print( recipes->array[id-1], id );
     else
       printf( "ID: %d は存在しません。\n", id );
   } else {
     for ( uint32_t i = 0; i < recipes->size; i++ ) {
-      printf( "%d: %s\n", i+1, recipes->lines[i] );
+      recipe_print( recipes->array[i], i+1 );
     }
   }
 }
@@ -90,11 +114,11 @@ int main( int argc, char* argv[] ) {
   }
 
   /* レシピの処理 */
-  recipe_lines_t *recipes = recipe_lines_create( recipe_fp );
-  recipe_lines_print(recipes, recipe_specified_id);
+  recipe_array_t *recipes = recipe_array_create( recipe_fp );
+  recipe_array_print(recipes, recipe_specified_id);
   
   fclose( recipe_fp );
-  recipe_lines_free( recipes );
+  recipe_array_free( recipes );
   
   return 0;
 }

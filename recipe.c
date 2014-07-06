@@ -1,3 +1,4 @@
+//! gcc -std=gnu99 -o recipe recipe.c -W -Wall
 #include <stdio.h>
 #include <string.h>
 

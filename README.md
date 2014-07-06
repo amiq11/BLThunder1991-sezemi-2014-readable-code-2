@@ -20,11 +20,19 @@ gccを使用してビルドする
 
 プログラムの使用方法
 
-    % ./recipe [ファイル名]
+    % ./recipe ファイル名 [ID]
 
 プログラムの実行
 
     % ./recipe recipe-data.txt
-    オムライス
-    親子丼
-    杏仁豆腐
+    1: オムライス
+    2: 親子丼
+    3: 杏仁豆腐
+
+    % ./recipe recipe-data.txt 2
+    2: 親子丼
+
+    % ./recipe recipe-data.txt -1
+    1: オムライス
+    2: 親子丼
+    3: 杏仁豆腐
